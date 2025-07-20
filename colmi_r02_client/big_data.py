@@ -1,4 +1,7 @@
+
 import logging
+from dataclasses import dataclass
+from typing import List
 from colmi_r02_client.packet import make_packet
 
 CMD_BIG_DATA = 188
@@ -45,7 +48,20 @@ def parse_bigdata_response(packet: bytearray):
         return None
     
 
-def parse_bigdata_sleep_response(packet: bytearray):
+# Dataclasses for sleep data
+@dataclass
+class SleepPeriod:
+    type: int
+    minutes: int
+
+@dataclass
+class SleepDay:
+    daysAgo: int
+    sleepStart: int
+    sleepEnd: int
+    periods: List[SleepPeriod]
+
+def parse_bigdata_sleep_response(packet: bytearray) -> List[SleepDay] | None:
     """
     struct SleepData {
         uint8_t bigDataMagic = 188;
@@ -82,7 +98,7 @@ def parse_bigdata_sleep_response(packet: bytearray):
     crc16 = int.from_bytes(packet[4:6], 'little')
     sleep_days = packet[6]
     idx = 7
-    days = []
+    days: List[SleepDay] = []
     for _ in range(sleep_days):
         if idx + 6 > len(packet):
             logger.warning("Packet too short for another SleepDay")
@@ -91,20 +107,20 @@ def parse_bigdata_sleep_response(packet: bytearray):
         curDayBytes = packet[idx+1]
         sleepStart = int.from_bytes(packet[idx+2:idx+4], 'little', signed=True)
         sleepEnd = int.from_bytes(packet[idx+4:idx+6], 'little', signed=True)
-        periods = []
+        periods: List[SleepPeriod] = []
         period_idx = idx+6
         while period_idx < idx+1+curDayBytes:
             if period_idx+2 > len(packet):
                 break
             sleep_type = packet[period_idx]
             minutes = packet[period_idx+1]
-            periods.append({'type': sleep_type, 'minutes': minutes})
+            periods.append(SleepPeriod(type=sleep_type, minutes=minutes))
             period_idx += 2
-        days.append({
-            'daysAgo': daysAgo,
-            'sleepStart': sleepStart,
-            'sleepEnd': sleepEnd,
-            'periods': periods
-        })
+        days.append(SleepDay(
+            daysAgo=daysAgo,
+            sleepStart=sleepStart,
+            sleepEnd=sleepEnd,
+            periods=periods
+        ))
         idx += 1 + curDayBytes
     return days

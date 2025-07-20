@@ -42,7 +42,7 @@ class FullData:
     address: str
     heart_rates: list[hr.HeartRateLog | hr.NoData]
     sport_details: list[list[steps.SportDetail] | steps.NoData]
-    sleep_logs: list[dict] | None = None
+    sleep_logs: list[big_data.SleepDay | None]
 
 
 COMMAND_HANDLERS: dict[int, Callable[[bytearray], Any]] = {

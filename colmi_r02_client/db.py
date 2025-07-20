@@ -8,7 +8,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, rela
 from sqlalchemy import select, UniqueConstraint, ForeignKey, create_engine, event, func, types
 from sqlalchemy.engine import Engine, Dialect
 
-from colmi_r02_client import hr, steps, sleep
+from colmi_r02_client import hr, steps, big_data
 from colmi_r02_client.client import FullData
 from colmi_r02_client.date_utils import start_of_day, end_of_day, now
 
@@ -243,19 +243,19 @@ def _add_sleep_logs(sync: Sync, ring: Ring, data: FullData, session: Session) ->
         return
     logger.info(f"Adding {len(data.sleep_logs)} days of sleep logs")
     for log in data.sleep_logs:
-        # log: dict with daysAgo, sleepStart, sleepEnd, periods
-        if not log or not isinstance(log, dict):
+        if not log or not isinstance(log, big_data.SleepDay):
             continue
         # Calculate the date from daysAgo
-        date = (now() - timedelta(days=log.get("daysAgo", 0))).replace(hour=0, minute=0, second=0, microsecond=0)
+        date = (now() - timedelta(days=log.daysAgo)).replace(hour=0, minute=0, second=0, microsecond=0)
         # Check for existing log
         existing = session.scalars(
             select(SleepLog).where(SleepLog.ring_id == ring.ring_id, SleepLog.date == date)
         ).one_or_none()
-        periods_json = json.dumps(log.get("periods", []))
+        # Convert periods to list of dicts for JSON
+        periods_json = json.dumps([{'type': p.type, 'minutes': p.minutes} for p in log.periods])
         if existing:
-            existing.sleep_start = log.get("sleepStart", 0)
-            existing.sleep_end = log.get("sleepEnd", 0)
+            existing.sleep_start = log.sleepStart
+            existing.sleep_end = log.sleepEnd
             existing.periods = periods_json
             session.add(existing)
         else:
@@ -263,8 +263,8 @@ def _add_sleep_logs(sync: Sync, ring: Ring, data: FullData, session: Session) ->
                 date=date,
                 ring=ring,
                 sync=sync,
-                sleep_start=log.get("sleepStart", 0),
-                sleep_end=log.get("sleepEnd", 0),
+                sleep_start=log.sleepStart,
+                sleep_end=log.sleepEnd,
                 periods=periods_json,
             )
             session.add(s)
